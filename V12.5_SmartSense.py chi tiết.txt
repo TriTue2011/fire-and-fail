@@ -1,0 +1,160 @@
+1️⃣ Phần cấu hình (CONFIG)
+CAMERAS = {...}              # Danh sách camera RTSP
+EVENT_DIR = "events"          # Thư mục lưu ảnh/clip
+MODEL_PATH = "yolov8n-pose.pt"
+CONF_THRES = 0.35             # Ngưỡng confidence YOLO
+IMG_SIZE = 640                # Kích thước ảnh đầu vào YOLO
+INFER_PERIOD = 0.25           # Khoảng thời gian giữa các inference
+
+
+Fall detection parameters:
+
+TORSO_ANGLE_THRESHOLD = 45: góc nghiêng trục vai–hông để xác định khả năng ngã.
+
+STATIONARY_SECONDS = 2.2: thời gian để coi là đứng yên.
+
+STATIONARY_MOVEMENT_PX = 35: khoảng di chuyển nhỏ để coi là đứng yên.
+
+FALL_CONFIRM_FRAMES = 2: số frame liên tiếp xác nhận fall trước khi alert.
+
+COOLDOWN_SECONDS = 10: thời gian cooldown tránh gửi alert spam.
+
+RECOVER_SECONDS = 2.0: thời gian giám sát phục hồi (người đứng dậy).
+
+Motion prefilter giảm inference không cần thiết:
+
+MOTION_THRESHOLD, MOTION_MIN_AREA.
+
+
+2️⃣ YOLO Pose Model
+model = YOLO(MODEL_PATH)
+device = "cuda" if model.device.type == "cuda" else "cpu"
+
+
+Tải YOLOv8-pose (yolov8n-pose.pt) cho phát hiện keypoints (vai, hông, chân, tay...).
+
+Hỗ trợ CUDA nếu có GPU, fallback CPU nếu không.
+
+3️⃣ Telegram Helpers
+def send_telegram_photo(image_path, caption=""):
+
+
+Chỉ gửi ảnh qua Telegram, không gửi video, để tránh spam.
+
+Lưu ảnh + clip local cho ghi log.
+
+4️⃣ ReaderThread
+
+Đọc video từ RTSP.
+
+Giữ self.frame và self.lock để thread Detector có thể lấy frame mới nhất.
+
+get_fps() tự động lấy FPS từ camera hoặc mặc định 25 FPS.
+
+Có cơ chế reconnect nếu mất kết nối.
+
+✅ Mạnh: multi-camera, tự động reconnect.
+⚠️ Hạn chế: nếu RTSP rất yếu, buffer có thể bị bỏ frame.
+
+5️⃣ DetectorThread
+5.1 Motion Prefilter
+gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+diff = cv2.absdiff(self.motion_bg, gray)
+motion_area = np.sum(thresh)/255
+if motion_area < MOTION_MIN_AREA: continue
+
+
+Giảm số lần inference YOLO nếu không có chuyển động lớn.
+
+Tăng hiệu suất, giảm tải GPU/CPU.
+
+5.2 Assign ID
+
+Dùng centroid matching: nếu gần ID_DISTANCE_PX, giữ nguyên ID.
+
+Tránh tình trạng “mỗi frame là ID mới”.
+
+5.3 Skeleton
+self.draw_skeleton(frame, kparr, color)
+
+
+Vẽ trực quan keypoints & nối các khớp.
+
+Màu xanh = OK, đỏ = FALL.
+
+5.4 Fall Detection Logic
+
+Tính angle giữa vai–hông.
+
+Tính moved: khoảng di chuyển trong STATIONARY_SECONDS.
+
+Nếu angle > TORSO_ANGLE_THRESHOLD và moved < STATIONARY_MOVEMENT_PX → flag fall.
+
+Dùng fall_frame_count & candidate_start để confirm fall, tránh cảnh báo sai do chuyển động tạm thời.
+
+5.5 Recovery
+
+Nếu người đã ngã và di chuyển > STATIONARY_MOVEMENT_PX → phục hồi trạng thái was_fallen=False.
+
+5.6 Alert & Save
+
+_alert_and_save():
+
+Lưu ảnh snapshot
+
+Chỉ gửi ảnh Telegram
+
+Lưu clip video pre + post event.
+
+✅ Mạnh: thông minh, giảm spam, lưu log.
+⚠️ Hạn chế: Nếu nhiều camera + nhiều người → buffer video có thể chiếm RAM nhiều (hiện tại buffer tối đa EVENT_DURATION*30 frame).
+
+6️⃣ LiveViewThread
+
+Ghép nhiều camera vào grid live view.
+
+Hiển thị skeleton & ID trực quan.
+
+ESC để thoát.
+
+7️⃣ Main
+
+Khởi tạo ReaderThread + DetectorThread cho mỗi camera.
+
+Khởi tạo LiveViewThread.
+
+Loop chính chỉ để giữ chương trình chạy.
+
+8️⃣ Ưu điểm
+
+Nhạy và trực quan: skeleton + fall streak + cooldown thông minh.
+
+Đa camera / đa người: centroid tracking + ID matching.
+
+Chống spam Telegram: chỉ gửi ảnh.
+
+Lưu log đầy đủ: ảnh + clip local.
+
+Motion prefilter → giảm load GPU/CPU.
+
+9️⃣ Hạn chế & gợi ý cải tiến
+
+Hiệu suất multi-camera lớn:
+
+Nếu >4 camera, thread + GPU inference có thể bottleneck. Có thể dùng asyncio hoặc process pool để cải thiện.
+
+Buffer RAM:
+
+deque(maxlen=EVENT_DURATION*30) có thể chiếm RAM nếu camera 4K. Có thể lưu tạm vào disk cache nếu quá lớn.
+
+Adaptive Sensitivity:
+
+Hiện tại threshold cố định. Có thể thêm tự điều chỉnh theo môi trường (ánh sáng, tốc độ di chuyển trung bình) để giảm cảnh báo sai.
+
+Sử dụng tracker chuyên dụng:
+
+Centroid matching đơn giản, nhưng nếu nhiều người gần nhau → dễ nhầm ID. Có thể dùng DeepSORT / BYTETrack kết hợp pose.
+
+Logging:
+
+Hiện tại chỉ print ra console. Có thể ghi log vào file .log để dễ theo dõi.

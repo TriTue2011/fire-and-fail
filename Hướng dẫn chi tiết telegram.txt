@@ -1,0 +1,98 @@
+
+🧠 Tổng quan hướng dẫn gửi tin nhắn qua telegram
+
+BOT_TOKEN = mã truy cập cho bot (giống mật khẩu API).
+
+CHAT_ID = ID của nơi bạn muốn bot gửi tin (cá nhân hoặc nhóm).
+
+Bạn chỉ cần tạo bot 1 lần, và có thể dùng mãi trong nhiều project khác nhau (ví dụ cảnh báo ngã, cảnh báo rác, v.v.).
+
+🪄 Bước 1: Tạo bot để lấy BOT_TOKEN
+
+Mở Telegram trên điện thoại hoặc máy tính.
+
+Tìm bot chính thức của Telegram: @BotFather
+→ Biểu tượng có dấu ✅ màu xanh.
+
+Gõ lệnh:
+
+/newbot
+
+
+Làm theo hướng dẫn:
+
+Đặt tên bot (ví dụ: Camera Sơn Tùng)
+
+Đặt username bot (bắt buộc kết thúc bằng _bot, ví dụ: CameraSonTung_bot)
+
+Sau khi xong, BotFather sẽ gửi bạn 1 đoạn như:
+
+Done! Congratulations on your new bot.
+You will find it at t.me/CameraSonTung_bot
+Use this token to access the HTTP API:
+123456789:AAEExxxxYYYYzzzzZZZZ
+
+
+👉 Dòng cuối chính là BOT_TOKEN.
+➡️ Copy và dán vào code:
+
+BOT_TOKEN = "123456789:AAEExxxxYYYYzzzzZZZZ"
+
+💬 Bước 2: Lấy CHAT_ID (ID nơi nhận tin nhắn)
+🧍‍♂️ Trường hợp 1: Gửi tin nhắn cho chính bạn
+
+Mở Telegram, tìm bot bạn vừa tạo (vd: @CameraSonTung_bot)
+
+Bấm Start (rất quan trọng, nếu chưa bấm Start → bot bị chặn)
+
+Gửi 1 tin bất kỳ, ví dụ:
+
+test
+
+
+Trên máy tính bạn mở trình duyệt và dán đường này (thay BOT_TOKEN thật vào):
+
+https://api.telegram.org/bot<BOT_TOKEN>/getUpdates
+
+
+👉 Ví dụ:
+
+https://api.telegram.org/bot123456789:AAEExxxxYYYYzzzzZZZZ/getUpdates
+
+
+Bạn sẽ thấy kết quả dạng JSON, ví dụ:
+
+{
+  "ok": true,
+  "result": [{
+    "update_id": 123456,
+    "message": {
+      "chat": {
+        "id": 8490100526,
+        "first_name": "Son Tung",
+        "type": "private"
+      },
+      "text": "test"
+    }
+  }]
+}
+
+
+➡️ Con số "id": 8490100526 chính là CHAT_ID.
+
+------------------------------------------------------
+👥 Trường hợp 2: Gửi tin nhắn vào nhóm
+
+Tạo nhóm Telegram.
+
+Thêm bot của bạn vào nhóm đó.
+
+Gửi 1 tin nhắn bất kỳ trong nhóm.
+
+Truy cập:
+
+https://api.telegram.org/bot<BOT_TOKEN>/getUpdates
+
+
+Kết quả sẽ có "chat": {"id": -1001234567890, "type": "supergroup"}
+➡️ Copy số âm đó làm CHAT_ID.

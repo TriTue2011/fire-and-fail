@@ -1,0 +1,91 @@
+1️⃣ Cài Python
+
+Tải Python 3.11 hoặc 3.12 từ python.org
+.
+
+Khi cài, chọn “Add Python to PATH” để có thể chạy Python từ command line.
+
+2️⃣Cài các thư viện cần thiết
+
+Trong CMD, chạy:
+
+pip install --upgrade pip
+pip install opencv-python-headless numpy requests ultralytics
+
+
+opencv-python-headless: xử lý video và hình ảnh.
+
+numpy: tính toán ma trận, khoảng cách, v.v.
+
+requests: gửi ảnh + thông báo Telegram.
+
+ultralytics: YOLOv8 (pose detection).
+
+Nếu muốn xem trực tiếp camera, bạn có thể dùng opencv-python thay vì -headless.
+
+3️⃣Chuẩn bị YOLO Pose Model
+
+Tải yolov8n-pose.pt từ Ultralytics
+
+https://github.com/ultralytics/assets/releases
+
+Đặt file yolov8n-pose.pt vào cùng thư mục với file: Phat hien nga - Fall detection
+
+4️⃣ Chuẩn bị camera RTSP
+
+Có thể dùng camera IP hoặc webcam.
+
+Ví dụ:
+
+CAMERAS = {
+    "Cam1": "rtsp://username:password@192.168.1.3:554/cam/realmonitor?channel=1&subtype=0",
+}
+
+
+Nếu không có camera RTSP, bạn có thể thử 0 cho webcam mặc định:
+
+CAMERAS = {"Cam1": 0}
+
+5️⃣ Cấu hình Telegram (tùy chọn)
+
+Có file hướng dẫn telegram riêng
+
+Điền vào Code chỗ này:
+
+TELEGRAM_BOT_TOKEN = "YOUR_BOT_TOKEN"
+TELEGRAM_CHAT_ID = "YOUR_CHAT_ID"
+
+
+6️⃣ Tạo thư mục lưu sự kiện
+
+Code tự tạo thư mục events nếu chưa có, bạn cũng có thể tạo thư mục events
+
+7️⃣ Chạy file phát hiện ngã - Fall Detection
+
+Fall detection.py
+
+Một cửa sổ live view xuất hiện, nhấn ESC để thoát.
+
+8️⃣ Kiểm tra và tinh chỉnh
+
+Thử di chuyển, ngã nhẹ, ngã thật để kiểm tra cảnh báo.
+
+Nếu quá nhiều false alert hoặc quá chậm, chỉnh các tham số trong phần CONFIG:
+
+TORSO_ANGLE_THRESHOLD
+
+STATIONARY_SECONDS
+
+STATIONARY_MOVEMENT_PX
+
+FALL_CONFIRM_FRAMES
+
+📌 Mẹo cho người mới
+
+Chạy đầu tiên với webcam (CAMERAS={"Cam1":0}) để làm quen.
+
+Chạy trên PC có GPU với CUDA sẽ nhanh hơn nhiều; nếu không có GPU, YOLO vẫn chạy trên CPU nhưng chậm hơn.
+
+Luôn kiểm tra thư mục events/ để đảm bảo ảnh + clip được lưu đúng.
+
+Không cần chỉnh code nếu chỉ muốn nhận alert qua Telegram và lưu sự kiện local.

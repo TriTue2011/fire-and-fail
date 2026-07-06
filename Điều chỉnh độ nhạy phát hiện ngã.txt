@@ -1,0 +1,80 @@
+Để điều chỉnh độ nhạy phát hiện ngã trong phiên bản V12.5/SmartSense, bạn chủ yếu sẽ can thiệp vào một số tham số cấu hình quan trọng. Tôi sẽ liệt kê, giải thích tác dụng và cách tăng/giảm độ nhạy:
+
+1️⃣ TORSO_ANGLE_THRESHOLD
+TORSO_ANGLE_THRESHOLD = 45  # góc nghiêng trục vai–hông
+
+
+Tác dụng: xác định người có nghiêng đủ để coi là ngã hay không.
+
+Nhạy hơn: giảm giá trị, ví dụ 40 → hệ thống dễ nhận diện ngã sớm, có thể cảnh báo khi người chỉ hơi ngả.
+
+Ít nhạy hơn: tăng giá trị, ví dụ 50 → chỉ cảnh báo khi người thực sự ngã nghiêm trọng.
+
+2️⃣ STATIONARY_SECONDS
+STATIONARY_SECONDS = 2.2  # thời gian đứng yên để xác nhận ngã
+
+
+Tác dụng: thời gian mà người đứng yên (không di chuyển nhiều) mới coi là ngã.
+
+Nhạy hơn: giảm xuống 1.5–2 giây → alert nhanh hơn, nhưng có thể nhầm với người ngồi, cúi.
+
+Ít nhạy hơn: tăng lên 3–4 giây → loại bỏ cảnh báo giả nhưng phát hiện chậm.
+
+3️⃣ STATIONARY_MOVEMENT_PX
+STATIONARY_MOVEMENT_PX = 35  # khoảng di chuyển tối đa để coi là đứng yên
+
+
+Tác dụng: khoảng di chuyển nhỏ trong thời gian STATIONARY_SECONDS để xác nhận “người không di chuyển”.
+
+Nhạy hơn: tăng giá trị, ví dụ 40–50 → hệ thống coi người đứng yên ngay cả khi có di chuyển nhẹ (nhẹ nhàng cử động) → dễ phát hiện ngã.
+
+Ít nhạy hơn: giảm giá trị, ví dụ 20–25 → hệ thống chỉ coi là ngã nếu gần như không di chuyển → tránh cảnh báo giả.
+
+4️⃣ FALL_CONFIRM_FRAMES
+FALL_CONFIRM_FRAMES = 2  # số frame liên tiếp để confirm fall
+
+
+Tác dụng: số frame YOLO liên tiếp báo flag fall mới coi là “có khả năng ngã”.
+
+Nhạy hơn: giảm xuống 1 → alert nhanh, nhưng dễ nhận nhầm cúi, quỳ, ngồi.
+
+Ít nhạy hơn: tăng lên 3–4 → giảm false alarm, nhưng phát hiện chậm.
+
+5️⃣ COOLDOWN_SECONDS
+COOLDOWN_SECONDS = 10  # thời gian chờ giữa các alert
+
+
+Tác dụng: tránh gửi alert liên tục cho cùng một người.
+
+Nhạy hơn: giảm xuống 5 giây → có thể gửi alert nhanh hơn nếu người vẫn ở trạng thái ngã.
+
+Ít nhạy hơn: tăng lên 15–20 giây → giảm spam, nhưng nếu người đứng dậy và lại ngã thì cảnh báo chậm.
+
+6️⃣ MOTION_THRESHOLD & MOTION_MIN_AREA
+MOTION_THRESHOLD = 40
+MOTION_MIN_AREA = 5000
+
+
+Tác dụng: motion prefilter, quyết định khi nào YOLO được gọi.
+
+Nhạy hơn: giảm MOTION_THRESHOLD hoặc MOTION_MIN_AREA → YOLO chạy nhiều hơn, phát hiện ngã ngay cả khi di chuyển nhẹ.
+
+Ít nhạy hơn: tăng giá trị → YOLO chỉ chạy khi có chuyển động rõ rệt, giảm false alarm nhưng có thể bỏ sót.
+
+📌 Lời khuyên
+
+Để tăng độ nhạy:
+
+Giảm TORSO_ANGLE_THRESHOLD
+
+Giảm STATIONARY_SECONDS
+
+Tăng STATIONARY_MOVEMENT_PX
+
+Giảm FALL_CONFIRM_FRAMES
+
+Để giảm false alarm / ít nhạy hơn:
+
+Ngược lại: tăng TORSO_ANGLE_THRESHOLD, tăng STATIONARY_SECONDS, giảm STATIONARY_MOVEMENT_PX, tăng FALL_CONFIRM_FRAMES.
+
+Test thực tế: luôn thử với các tình huống thực tế (ngồi, cúi, đi lại, ngã) để cân chỉnh cho môi trường cụ thể.
