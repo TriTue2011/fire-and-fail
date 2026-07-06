@@ -21,15 +21,23 @@ from ultralytics import YOLO
 import warnings
 from ctypes import *
 from firesdk import *
-from flask import Flask, Response, render_template_string
+from flask import Flask, Response, render_template_string, request, send_from_directory
+import json
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 # ===================== CONFIG =====================
-CAMERAS = {
-    "Cam1": "rtsp://admin:Tung1234@192.168.1.3:554/cam/realmonitor?channel=1&subtype=0",
-    # thêm camera nếu cần
-}
+CONFIG_FILE = "cameras.json"
+
+if os.path.exists(CONFIG_FILE):
+    with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+        CAMERAS = json.load(f)
+else:
+    CAMERAS = {
+        "Cam1": "rtsp://admin:Tung1234@192.168.1.3:554/cam/realmonitor?channel=1&subtype=0"
+    }
+    with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+        json.dump(CAMERAS, f, indent=4)
 
 EVENT_DIR = "events"
 os.makedirs(EVENT_DIR, exist_ok=True)
@@ -450,10 +458,82 @@ def stream(cam_name):
 
 @web_app.route('/')
 def index():
-    html = "<html><head><title>Live Camera Feeds</title><style>body{background:#222;color:#fff;font-family:sans-serif;} img{border:2px solid #555;border-radius:5px;}</style></head><body><h1>SmartSense Live Feeds</h1>"
+    html = """
+    <html><head><title>SmartSense Dashboard</title>
+    <style>body{background:#111;color:#fff;font-family:sans-serif;} img{border:2px solid #555;border-radius:5px;} .nav{margin-bottom:20px;} .nav a{color:#00ffcc; margin-right:15px; text-decoration:none; font-size:18px;}</style>
+    </head><body>
+    <div class="nav">
+        <a href="/">📺 Live Feeds</a>
+        <a href="/events">🎞️ View Events</a>
+        <a href="/config">⚙️ Settings</a>
+    </div>
+    <h1>Live Camera Feeds</h1>
+    """
     for name in global_detectors.keys():
         html += f"<h3>{name}</h3><img src='/stream/{name}' width='640'/><br>"
     html += "</body></html>"
+    return render_template_string(html)
+
+@web_app.route('/events')
+def list_events():
+    files = sorted(os.listdir(EVENT_DIR), key=lambda x: os.path.getmtime(os.path.join(EVENT_DIR, x)), reverse=True)
+    html = """
+    <html><head><title>Events</title>
+    <style>body{background:#111;color:#fff;font-family:sans-serif;} .nav a{color:#00ffcc; margin-right:15px; text-decoration:none; font-size:18px;} .file-list{margin-top:20px;} .file-item{margin-bottom:10px;} video{max-width:640px; margin-bottom:20px;}</style>
+    </head><body>
+    <div class="nav">
+        <a href="/">📺 Live Feeds</a>
+        <a href="/events">🎞️ View Events</a>
+        <a href="/config">⚙️ Settings</a>
+    </div>
+    <h1>Saved Events</h1>
+    <div class="file-list">
+    """
+    for f in files:
+        if f.endswith('.jpg'):
+            html += f"<div class='file-item'>📸 <a style='color:#fff;' target='_blank' href='/events/{f}'>{f}</a></div>"
+        elif f.endswith('.mp4'):
+            html += f"<div class='file-item'>🎥 <a style='color:#fff;' target='_blank' href='/events/{f}'>{f}</a></div>"
+    html += "</div></body></html>"
+    return render_template_string(html)
+
+@web_app.route('/events/<path:filename>')
+def serve_event(filename):
+    return send_from_directory(EVENT_DIR, filename)
+
+@web_app.route('/config', methods=['GET', 'POST'])
+def config():
+    if request.method == 'POST':
+        new_conf = request.form.get('cameras_json')
+        try:
+            parsed = json.loads(new_conf)
+            with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+                json.dump(parsed, f, indent=4)
+            # Khởi động lại container sau 1s
+            threading.Thread(target=lambda: (time.sleep(1), os._exit(1))).start()
+            return "<h2 style='color:green;'>Lưu thành công! Đang khởi động lại hệ thống... Vui lòng tải lại trang sau 5 giây.</h2>"
+        except Exception as e:
+            return f"<h2 style='color:red;'>Lỗi cú pháp JSON: {e}</h2>"
+            
+    with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+        conf_str = f.read()
+        
+    html = """
+    <html><head><title>Settings</title>
+    <style>body{background:#111;color:#fff;font-family:sans-serif;} .nav a{color:#00ffcc; margin-right:15px; text-decoration:none; font-size:18px;} textarea{width:80%; height:300px; background:#222; color:#fff; font-family:monospace; padding:10px; font-size:16px;}</style>
+    </head><body>
+    <div class="nav">
+        <a href="/">📺 Live Feeds</a>
+        <a href="/events">🎞️ View Events</a>
+        <a href="/config">⚙️ Settings</a>
+    </div>
+    <h1>Camera Configuration (JSON)</h1>
+    <form method="POST">
+        <textarea name="cameras_json">""" + conf_str + """</textarea><br><br>
+        <button type="submit" style="padding:10px 20px; background:#00ffcc; color:#000; font-weight:bold; font-size:16px; border:none; border-radius:5px; cursor:pointer;">Save & Restart System</button>
+    </form>
+    </body></html>
+    """
     return render_template_string(html)
 
 def run_webui():
