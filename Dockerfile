@@ -27,7 +27,7 @@ RUN ldconfig
 COPY ./libfire.so .
 COPY ./app.py .
 COPY ./firesdk.py .
-COPY ./"Fall detection.py" .
+COPY ["Fall detection.py", "."]
 COPY ./requirements.txt .
 COPY ./license.txt .
 COPY ./run.sh .
