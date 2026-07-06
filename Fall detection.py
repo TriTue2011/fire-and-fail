@@ -113,6 +113,7 @@ class ReaderThread(threading.Thread):
         self.running = True
 
     def open_stream(self):
+        os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;tcp"
         cap = cv2.VideoCapture(self.url, cv2.CAP_FFMPEG)
         cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
         return cap
