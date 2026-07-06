@@ -44,7 +44,7 @@ os.makedirs(EVENT_DIR, exist_ok=True)
 
 MODEL_PATH = "yolov8n-pose.pt"
 CONF_THRES = 0.35
-IMG_SIZE = 640
+IMG_SIZE = 320  # GIẢM ĐỘ PHÂN GIẢI XUỐNG 320 (Tăng tốc độ FPS lên gấp 4 lần trên CPU)
 INFER_PERIOD = 0.05  # Nâng lên tối đa 20 khung hình/giây
 
 FIRE_INFER_PERIOD = 0.5 # Quét lửa 2 lần 1 giây
