@@ -20,9 +20,9 @@ import requests
 from ultralytics import YOLO
 import warnings
 from ctypes import *
-from firesdk import *
 from flask import Flask, Response, render_template_string, request, send_from_directory
 import json
+import urllib.request
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
@@ -45,29 +45,18 @@ os.makedirs(EVENT_DIR, exist_ok=True)
 MODEL_PATH = "yolov8n-pose.pt"
 CONF_THRES = 0.35
 IMG_SIZE = 640
-INFER_PERIOD = 0.25  # giây giữa các lần inference
+INFER_PERIOD = 0.05  # Nâng lên tối đa 20 khung hình/giây
 
-FIRE_INFER_PERIOD = 1.0
+FIRE_INFER_PERIOD = 0.5 # Quét lửa 2 lần 1 giây
 FIRE_COOLDOWN_SECONDS = 10
 fire_sdk_lock = threading.Lock()
 
-def init_fire_sdk():
-    machineCode = getMachineCode()
-    print("machineCode: ", machineCode.decode('utf-8'))
-    try:
-        with open("license.txt", 'r') as file:
-            license_key = file.read().strip()
-    except IOError as exc:
-        print("failed to open license.txt: ", exc.errno)
-        license_key = ""
-    ret = setActivation(license_key.encode('utf-8'))
-    print("activation: ", ret)
-    ret = initSDK()
-    print("init fire SDK: ", ret)
-
-def mat_to_bytes(mat):
-    is_success, buffer = cv2.imencode(".png", mat)
-    return buffer.tobytes()
+# Tải YOLO model cho Báo Cháy (Mã nguồn mở miễn phí)
+FIRE_MODEL_PATH = "fire_model.pt"
+if not os.path.exists(FIRE_MODEL_PATH):
+    print("🔥 Downloading Open-Source Fire YOLO model...")
+    urllib.request.urlretrieve("https://huggingface.co/rabahdev/fire-smoke-yolov8n/resolve/main/best.pt", FIRE_MODEL_PATH)
+fire_model = YOLO(FIRE_MODEL_PATH)
 
 # Fall detection parameters (giữ nguyên độ nhạy hiện tại)
 TORSO_ANGLE_THRESHOLD = 45
@@ -241,36 +230,31 @@ class DetectorThread(threading.Thread):
                 self._set_vis(frame)
                 continue
             
-            # Fire detection
+            # Fire detection bằng YOLO
             if time.time() - self.last_fire_infer > FIRE_INFER_PERIOD:
                 self.last_fire_infer = time.time()
                 try:
-                    img_byte = mat_to_bytes(frame)
-                    box_array = (c_int * 1024)()
-                    score_array = (c_float * 1024)()
-                    label_array = (c_int * 1024)()
-                    
                     with fire_sdk_lock:
-                        cnt = getFireDetection(img_byte, len(img_byte), label_array, box_array, score_array)
+                        fire_results = fire_model.predict(frame, conf=0.3, imgsz=IMG_SIZE, verbose=False, device=device)
                     
-                    if cnt > 0:
-                        fire_detected = False
-                        for i in range(cnt):
-                            x, y, w, h = box_array[i*4], box_array[i*4+1], box_array[i*4+2], box_array[i*4+3]
-                            label = "fire" if label_array[i] == 0 else "smoke"
-                            score = score_array[i]
-                            cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 165, 255), 2)
-                            cv2.putText(frame, f"{label} {score:.2f}", (x, max(10, y-5)), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 165, 255), 2)
-                            fire_detected = True
+                    fire_detected = False
+                    for box in fire_results[0].boxes:
+                        x1, y1, x2, y2 = map(int, box.xyxy[0])
+                        conf = float(box.conf[0])
+                        cls = int(box.cls[0])
+                        label_name = fire_results[0].names[cls]
+                        cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 165, 255), 2)
+                        cv2.putText(frame, f"{label_name} {conf:.2f}", (x1, max(10, y1-5)), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 165, 255), 2)
+                        fire_detected = True
                         
-                        if fire_detected and time.time() - self.last_fire_alert > FIRE_COOLDOWN_SECONDS:
-                            self.last_fire_alert = time.time()
-                            print(f"[{self.name}] 🔥 FIRE/SMOKE DETECTED!")
-                            event_time=datetime.now().strftime("%Y%m%d_%H%M%S")
-                            img_path=os.path.join(EVENT_DIR,f"{self.name}_FIRE_{event_time}.jpg")
-                            cv2.imwrite(img_path, frame)
-                            send_telegram_photo(img_path,caption=f"🚨 FIRE/SMOKE in {self.name} at {event_time}")
-                            threading.Thread(target=self._save_clip,args=("FIRE",),daemon=True).start()
+                    if fire_detected and time.time() - self.last_fire_alert > FIRE_COOLDOWN_SECONDS:
+                        self.last_fire_alert = time.time()
+                        print(f"[{self.name}] 🔥 FIRE/SMOKE DETECTED!")
+                        event_time=datetime.now().strftime("%Y%m%d_%H%M%S")
+                        img_path=os.path.join(EVENT_DIR,f"{self.name}_FIRE_{event_time}.jpg")
+                        cv2.imwrite(img_path, frame)
+                        send_telegram_photo(img_path,caption=f"🚨 FIRE/SMOKE in {self.name} at {event_time}")
+                        threading.Thread(target=self._save_clip,args=("FIRE",),daemon=True).start()
                 except Exception as e:
                     print(f"[{self.name}] Fire detection error: {e}")
 
@@ -542,7 +526,6 @@ def run_webui():
 # ===================== MAIN =====================
 def main():
     global global_detectors
-    init_fire_sdk()
     readers={name:ReaderThread(name,url) for name,url in CAMERAS.items()}
     for r in readers.values(): r.start()
     detectors={name:DetectorThread(name,readers[name]) for name in readers}
