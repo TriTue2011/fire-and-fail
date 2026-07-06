@@ -21,6 +21,7 @@ from ultralytics import YOLO
 import warnings
 from ctypes import *
 from firesdk import *
+from flask import Flask, Response, render_template_string
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
@@ -423,13 +424,54 @@ class LiveViewThread(threading.Thread):
                 os._exit(0)
             time.sleep(0.01)
 
+# ===================== WEB UI =====================
+web_app = Flask(__name__)
+global_detectors = {}
+
+def generate_frames(cam_name):
+    detector = global_detectors.get(cam_name)
+    while detector:
+        frame = getattr(detector, "frame_vis", None)
+        if frame is None:
+            time.sleep(0.1)
+            continue
+        ret, buffer = cv2.imencode('.jpg', frame)
+        if not ret:
+            time.sleep(0.1)
+            continue
+        frame_bytes = buffer.tobytes()
+        yield (b'--frame\r\n'
+               b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+        time.sleep(0.05)
+
+@web_app.route('/stream/<cam_name>')
+def stream(cam_name):
+    return Response(generate_frames(cam_name), mimetype='multipart/x-mixed-replace; boundary=frame')
+
+@web_app.route('/')
+def index():
+    html = "<html><head><title>Live Camera Feeds</title><style>body{background:#222;color:#fff;font-family:sans-serif;} img{border:2px solid #555;border-radius:5px;}</style></head><body><h1>SmartSense Live Feeds</h1>"
+    for name in global_detectors.keys():
+        html += f"<h3>{name}</h3><img src='/stream/{name}' width='640'/><br>"
+    html += "</body></html>"
+    return render_template_string(html)
+
+def run_webui():
+    web_app.run(host='0.0.0.0', port=9000, debug=False, use_reloader=False)
+
 # ===================== MAIN =====================
 def main():
+    global global_detectors
     init_fire_sdk()
     readers={name:ReaderThread(name,url) for name,url in CAMERAS.items()}
     for r in readers.values(): r.start()
     detectors={name:DetectorThread(name,readers[name]) for name in readers}
+    global_detectors = detectors
     for d in detectors.values(): d.start()
+    
+    # Start Web UI
+    threading.Thread(target=run_webui, daemon=True).start()
+    
     # live=LiveViewThread(detectors)
     # live.start()
     try:
