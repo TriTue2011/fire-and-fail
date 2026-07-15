@@ -1,7 +1,8 @@
-flask
+flask>=2.3
 flask-cors
 gradio==3.50.2
 datadog_api_client
-opencv-python
-ultralytics
-requests
+opencv-python>=4.8
+ultralytics>=8.1
+numpy>=1.23
+requests>=2.28
